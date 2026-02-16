@@ -1,0 +1,27 @@
+# Core backend
+fastapi
+uvicorn
+
+# LangChain core & integrations
+langchain
+langchain-community
+langchain-text-splitters
+langchain-ollama
+
+# LLM (local)
+ollama
+
+# Embeddings (Hugging Face)
+transformers
+sentence-transformers
+torch
+
+# Vector database (cloud)
+pinecone
+
+# GitHub repo ingestion
+gitpython
+
+# Utilities
+python-dotenv
+tqdm
