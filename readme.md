@@ -1,186 +1,168 @@
 # GitHub Repo Intelligence System
 
-A Retrieval-Augmented Generation (RAG) based system that allows users to analyze and interact with any GitHub repository.
+An end-to-end Retrieval-Augmented Generation (RAG) platform that indexes multi-file GitHub codebases and enables context-grounded semantic search and reasoning over source code.
 
-Users can:
-- Index a GitHub repository
-- Ask natural language questions about the codebase
-- Receive context-aware answers grounded in actual source code
+Built with FastAPI, LangChain, Pinecone Serverless, and LLaMA 3 (via Ollama).
 
 ---
 
-## Features
+## Architecture Flow
 
-- GitHub repository ingestion
-- Code parsing and chunking (Python support)
-- Semantic embeddings using Hugging Face
-- Vector storage using Pinecone
-- Namespace-based repository isolation
-- RAG pipeline using LangChain
-- FastAPI backend
-- (Optional) Streamlit frontend
++-------------------+
+|   GitHub Repo     |
++---------+---------+
+          |  (Shallow Clone --depth 1)
+          v
++-------------------+
+| Ingestion & AST   |
+| Code Splitter     |
++---------+---------+
+          |
+          v
++-------------------+
+| Hugging Face      |
+| Embeddings        |
++---------+---------+
+          |
+          v
++------------------+  Query   +-------------------+   Top-K Chunks   +------------------+
+| User / Streamlit | -------> | FastAPI Backend   | <--------------> | Pinecone (Vector |
+| Client           | <------- | (RAG Orchestrator)|                  | Namespace / Repo)|
++------------------+  Answer  +---------+---------+                  +------------------+
+                                  |
+                                  v
+                        +-------------------+
+                        | Ollama (LLaMA 3)  |
+                        | Context Grounding |
+                        +-------------------+
+
+### Core Pipeline:
+1. Targeted Ingestion: Clones repositories using shallow depth (--depth 1) and filters out binaries, lock files, and dependencies (.git, node_modules, venv, *.png).
+2. Syntax-Aware Chunking: Recursively segments source code using language-specific separators to preserve complete function and class boundaries.
+3. Isolated Vector Storage: Vectors are generated using Hugging Face Sentence Transformers and upserted into isolated Pinecone namespaces per repository to eliminate cross-codebase data leakage.
+4. Context-Grounded Retrieval: Injects top-k semantic code chunks into a strict hallucination-resistant prompt before querying local LLaMA 3 via Ollama.
 
 ---
 
-## Architecture Overview
+## Tech Stack
 
-User → FastAPI → RAG Pipeline → Pinecone → LLM (LLaMA3 via Ollama)
-
-### Step-by-step flow:
-
-1. User submits GitHub repo URL
-2. Repo is cloned locally
-3. Source files are parsed and chunked
-4. Chunks are converted into embeddings
-5. Embeddings are stored in Pinecone (namespace = repo name)
-6. User asks questions
-7. Query embedding retrieves relevant code chunks
-8. Retrieved chunks are injected into prompt
-9. LLM generates grounded answer
+- Orchestration & API: FastAPI, LangChain, Uvicorn
+- Vector Database: Pinecone (Serverless)
+- Embeddings: Hugging Face (sentence-transformers/all-MiniLM-L6-v2)
+- LLM Inference: Ollama (llama3:8b)
+- Frontend: Streamlit
+- Language: Python 3.10+
 
 ---
 
 ## Project Structure
 
 app/
-├── api/                # FastAPI routes
-├── embeddings/         # Hugging Face embeddings + Pinecone integration
-├── ingestion/          # GitHub cloning & file collection
-├── parsing/            # Code parsing & chunking
-├── rag/                # RAG pipeline (retriever + prompt + LLM)
-├── config.py           # Environment configuration
-└── main.py             # FastAPI entry point
-
+|-- api/             # FastAPI routers & request/response schemas
+|-- embeddings/      # Vector encoding & Pinecone client management
+|-- ingestion/       # Git shallow clone & file discovery filters
+|-- parsing/         # Code chunking & AST boundary splitting
+|-- rag/             # LCEL retrieval chains & system prompt templates
+|-- config.py        # Pydantic environment configurations
+`-- main.py          # FastAPI application factory
+frontend/
+`-- streamlit_app.py # Interactive codebase explorer UI
 data/
-└── repos/              # Locally cloned repositories
+`-- repos/           # Local repository staging (ephemeral)
+requirements.txt
+.env.example
+README.md
 
 ---
 
-## Tech Stack
+## Getting Started
 
-- Python
-- FastAPI
-- LangChain
-- Pinecone (Vector DB)
-- Hugging Face Sentence Transformers
-- Ollama (LLaMA3 local LLM)
-- Streamlit (optional frontend)
+### 1. Prerequisites
+- Python 3.10+
+- Ollama installed and running
+- Pinecone account & API key
+
+### 2. Pull the Local Model
+ollama pull llama3
+
+### 3. Environment Configuration
+Clone the repository and set up your .env:
+
+git clone https://github.com/Koushik-Pula/github_repo_intelligence.git
+cd github_repo_intelligence
+cp .env.example .env
+
+Configure your .env variables:
+PINECONE_API_KEY=your_pinecone_api_key
+PINECONE_INDEX_NAME=repo-intelligence
+PINECONE_ENVIRONMENT=us-east-1
+EMBEDDING_MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=llama3
+
+### 4. Installation
+python -m venv venv
+# Linux/macOS:
+source venv/bin/activate
+# Windows:
+venv\Scripts\activate
+
+pip install -r requirements.txt
+
+### 5. Run the System
+
+Start the FastAPI Service:
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+Interactive Swagger docs will be live at http://127.0.0.1:8000/docs.
+
+Start the Streamlit UI (Optional):
+streamlit run frontend/streamlit_app.py
 
 ---
 
-## Environment Variables
+## API Reference
 
-Create a `.env` file in the project root:
+### 1. Index a Repository
+POST /repo/analyze
 
-PINECONE_API_KEY=your_api_key_here  
-PINECONE_INDEX_NAME=repo-intelligence  
-
-Do NOT commit this file to GitHub.
-
----
-
-## Running the Backend
-
-1. Activate virtual environment:
-
-   venv\Scripts\activate   (Windows)
-
-2. Start FastAPI:
-
-   uvicorn app.main:app --reload
-
-3. Open:
-
-   http://127.0.0.1:8000/docs
-
----
-
-## API Endpoints
-
-### POST /repo/analyze
-
-Indexes a GitHub repository into Pinecone.
-
-Request body:
+Request:
 {
-  "repo_url": "https://github.com/owner/repo"
+  "repo_url": "https://github.com/fastapi/fastapi"
 }
 
 Response:
 {
   "status": "success",
-  "repo": "repo_name",
-  "chunks_indexed": 42
+  "namespace": "fastapi-fastapi",
+  "files_processed": 142,
+  "chunks_indexed": 846
 }
 
----
+### 2. Query Codebase
+POST /repo/chat
 
-### POST /repo/chat
-
-Ask a question about a previously indexed repository.
-
-Request body:
+Request:
 {
-  "repo": "repo_name",
-  "question": "How is preprocessing implemented?"
+  "namespace": "fastapi-fastapi",
+  "question": "How does the dependency injection system resolve sub-dependencies?"
 }
 
 Response:
 {
-  "answer": "..."
+  "answer": "FastAPI resolves sub-dependencies through the solve_dependencies function in routing.py by traversing...",
+  "sources": [
+    {
+      "file_path": "fastapi/dependencies/utils.py",
+      "lines": "45-98"
+    }
+  ]
 }
 
 ---
 
-## Namespace Design
+## Production & Architectural Highlights
 
-Each repository is stored in a separate Pinecone namespace:
-
-Index: repo-intelligence
-  ├── namespace: repoA
-  ├── namespace: repoB
-  └── namespace: repoC
-
-This ensures:
-- No cross-repo contamination
-- Clean retrieval isolation
-- Easy deletion per repository
-
----
-
-## Hallucination Control
-
-The RAG prompt enforces:
-
-- Answers must use retrieved code only
-- No assumptions about missing files
-- Clear refusal if concept not found
-
-This reduces hallucinations significantly.
-
----
-
-## Future Improvements
-
-- Add conversational memory
-- Add multi-language support
-- Add repo management UI
-- Add streaming responses
-- Add source citations in answers
-- Add repo deletion endpoint
-
----
-
-## Interview Talking Points
-
-- Implemented RAG over real-world codebases
-- Used Pinecone namespaces for repo isolation
-- Designed retrieval-first architecture
-- Reduced hallucination using strict prompt grounding
-- Built full-stack GenAI system (FastAPI + LLM + Vector DB)
-
----
-
-## License
-
-For educational and demonstration purposes.
+- Namespace Partitioning: Vector indices partition each repository into discrete Pinecone namespaces, allowing dynamic multi-tenant ingestion without vector mixing.
+- Grounding & Guardrails: Prompt templates enforce strict retrieval constraints; if a symbol, class, or route does not exist within retrieved contexts, the model explicitly flags lack of context rather than hallucinating external implementations.
+- AST-Aware Splitting: Avoids naive character chunking by preserving complete function/class declarations during code segmentation.
