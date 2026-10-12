@@ -7,7 +7,7 @@ Built with FastAPI, LangChain, Pinecone Serverless, and LLaMA 3 (via Ollama).
 ---
 
 ## Architecture Flow
-
+```text
 +-------------------+
 |   GitHub Repo     |
 +---------+---------+
@@ -35,6 +35,7 @@ Built with FastAPI, LangChain, Pinecone Serverless, and LLaMA 3 (via Ollama).
                         | Ollama (LLaMA 3)  |
                         | Context Grounding |
                         +-------------------+
+```
 
 ### Core Pipeline:
 1. Targeted Ingestion: Clones repositories using shallow depth (--depth 1) and filters out binaries, lock files, and dependencies (.git, node_modules, venv, *.png).
